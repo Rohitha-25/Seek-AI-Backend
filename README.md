@@ -208,6 +208,9 @@ export GEMINI_API_KEY=your-gemini-api-key
 ./mvnw spring-boot:run
 ```
 
+#### Related Repository
+https://github.com/Rohitha-25/Seek-AI-Frontend
+
 ### Terminology
 
 <table>
