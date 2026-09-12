@@ -1,45 +1,68 @@
-## 📄 seek — backend
+## 📄 Seek AI — Document Query Application — Backend
 
-Spring Boot + Java backend for seek, a RAG (Retrieval-Augmented Generation) application that lets users upload documents and ask natural-language questions about their content.
+#### Spring Boot + Java backend for Seek AI, a RAG (Retrieval-Augmented Generation) application that lets users upload documents and ask natural-language questions about their content.
 
 ### Workflow
-
 Backend implements the RAG (Retrieval-Augmented Generation) pattern: retrieving the most relevant sections of an uploaded document, then handing that context to a generative AI model to produce a grounded answer.
 
 #### Upload Flow
-
 ```
-File uploaded via POST /api/documents/upload
+Authenticated user uploads via POST /api/documents/upload
       ↓
 Apache Tika extracts raw text (PDF, DOCX, PPTX, TXT)
       ↓
 Text is split into chunks (~800 tokens each)
       ↓
-Each chunk is embedded (converted into a vector) via Gemini's embedding model
+Each chunk is embedded via Gemini's embedding model
       ↓
 Chunks + vectors are stored in an in-memory vector store
       ↓
-File metadata (name, upload time) is saved to PostgreSQL
+Document metadata + owner are saved to PostgreSQL
 ```
 
 #### Query Flow
-
 ```
-Question sent via POST /api/documents/{id}/query
+Authenticated user sends POST /api/documents/{id}/query
+      ↓
+Document ownership is verified
       ↓
 Question is embedded into a vector
       ↓
-Similarity search finds the top 5 most relevant chunks (filtered to that document)
+Similarity search finds the top 5 most relevant chunks
       ↓
 Chunks are joined into a "context" block
       ↓
-A prompt (instructions + context + question) is sent to Gemini's chat model
+A prompt (instructions + context + question) is sent to Gemini
       ↓
 Model generates a grounded answer, returned as JSON
 ```
 
-### Tech Stack
+### Authentication & Authorization
+Seek AI uses JWT-based authentication to protect document operations.
 
+#### Authentication Flow
+```
+Register
+   ↓
+Password hashed with BCrypt
+   ↓
+User stored in PostgreSQL
+
+Login
+   ↓
+Credentials verified
+   ↓
+JWT generated
+   ↓
+Token returned to client
+```
+
+Protected document requests require:
+```
+Authorization: Bearer <JWT>
+```
+
+### Tech Stack
 <table>
   <tr>
     <th>Purpose</th>
@@ -52,6 +75,10 @@ Model generates a grounded answer, returned as JSON
   <tr>
     <td>Framework</td>
     <td>Spring Boot, Maven</td>
+  </tr>
+  <tr> 
+     <td>Security</td> 
+     <td>Spring Security, JWT, BCrypt</td> 
   </tr>
   <tr>
     <td>AI orchestration</td>
@@ -76,7 +103,6 @@ Model generates a grounded answer, returned as JSON
 </table>
 
 ### Project Structure
-
 ```
 seek-backend
 ├── src
@@ -86,21 +112,30 @@ seek-backend
 │   │   │       └── seek
 │   │   │           └── docQuery
 │   │   │               ├── config
+│   │   │               │   ├── SecurityConfig.java
 │   │   │               │   └── VectorStoreConfig.java
 │   │   │               ├── controller
+│   │   │               │   ├── AuthController.java
 │   │   │               │   └── DocumentController.java
 │   │   │               ├── dto
+│   │   │               │   ├── AuthResponse.java
+│   │   │               │   ├── LoginRequest.java
+│   │   │               │   └── RegisterRequest.java
 │   │   │               │   ├── QueryRequest.java
 │   │   │               │   └── QueryResponse.java
 │   │   │               ├── entity
-│   │   │               │   └── Document.java
+│   │   │               │   ├── Document.java
+│   │   │               │   └── User.java
 │   │   │               ├── exception
 │   │   │               │   └── GlobalExceptionHandler.java
 │   │   │               ├── repository
-│   │   │               │   └── DocumentRepository.java
+│   │   │               │   ├── DocumentRepository.java
+│   │   │               │   └── UserRepository.java
 │   │   │               ├── service
+│   │   │               │   ├── AuthService.java
 │   │   │               │   ├── DocumentQueryService.java
-│   │   │               │   └── DocumentUploadService.java
+│   │   │               │   ├── DocumentUploadService.java
+│   │   │               │   └── JwtService.java
 │   │   │               └── SeekApplication.java
 │   │   └── resources
 │   │       └── application.properties
@@ -109,60 +144,25 @@ seek-backend
 └── mvnw.cmd
 ```
 
-<table>
-  <tr>
-    <th>File</th>
-    <th>Responsibility</th>
-  </tr>
-  <tr>
-    <td>Document.java</td>
-    <td>JPA entity mapping to the documents Postgres table (filename, upload time).</td>
-  </tr>
-  <tr>
-    <td>DocumentRepository.java</td>
-    <td>Spring Data JPA interface — provides CRUD operations with no hand-written SQL.</td>
-  </tr>
-  <tr>
-    <td>DocumentUploadService.java</td>
-    <td>Handles file upload: text extraction, chunking, embedding, storage.</td>
-  </tr>
-  <tr>
-    <td>DocumentQueryService.java</td>
-    <td>Handles query answering: embedding, similarity search, prompt construction, generation.</td>
-  </tr>
-  <tr>
-    <td>QueryRequest.java</td>
-    <td>Java record defining the shape of the incoming JSON body on query: { "query": "..." }.</td>
-  </tr>
-  <tr>
-    <td>QueryResponse.java</td>
-    <td>Java record defining the shape of the outgoing JSON response: { "answer": "..." }.</td>
-  </tr>
-  <tr>
-    <td>DocumentController.java</td>
-    <td>REST API layer exposing upload, list, query, and delete endpoints.</td>
-  </tr>
-  <tr>
-    <td>VectorStoreConfig.java</td>
-    <td>Manually configures the SimpleVectorStore bean.</td>
-  </tr>
-  <tr>
-    <td>GlobalExceptionHandler.java</td>
-    <td>Converts exceptions into clean JSON error responses.</td>
-  </tr>
-</table>
-
 #### Why Spring AI?
-
 Spring AI provides vendor-agnostic abstractions (EmbeddingModel, ChatModel, VectorStore) so the application logic doesn't depend on any single AI provider's SDK.
 
 ### API Endpoints
-
 <table>
   <tr>
     <th>Method</th>
     <th>Endpoint</th>
     <th>Description</th>
+  </tr>
+  <tr> 
+    <td>POST</td> 
+    <td>/api/auth/register</td> 
+    <td>Create a new user account.</td> 
+  </tr> 
+  <tr> 
+    <td>POST</td> 
+    <td>/api/auth/login</td> 
+    <td>Authenticate a user and return a JWT.</td> 
   </tr>
   <tr>
     <td>POST</td>
@@ -187,32 +187,28 @@ Spring AI provides vendor-agnostic abstractions (EmbeddingModel, ChatModel, Vect
 </table>
 
 ### Local Setup
-
 ```
-• Java 17
-• Maven
-• PostgreSQL running locally
-• Google Gemini API key
+- Java 17
+- Maven
+- PostgreSQL running locally
+- Google Gemini API key
+- JWT Secret
 ```
 
 #### Steps:
-
 ```
 # create the database
 psql -U postgres -c "CREATE DATABASE seek_db;"
 
 # set your API key
 export GEMINI_API_KEY=your-gemini-api-key
+export JWT_SECRET=your-long-random-secret
 
 # run the app
 ./mvnw spring-boot:run
 ```
 
-#### Related Repository
-https://github.com/Rohitha-25/Seek-AI-Frontend
-
 ### Terminology
-
 <table>
   <tr>
     <th>Term</th>
@@ -242,8 +238,15 @@ https://github.com/Rohitha-25/Seek-AI-Frontend
     <td>Prompt</td>
     <td>The instruction and context sent to a generative AI model.</td>
   </tr>
+  <tr> 
+    <td>JWT</td> 
+    <td>JSON Web Token used to authenticate users and protect document operations.</td> 
+  </tr>
   <tr>
     <td>CORS</td>
     <td>Browser security policy that blocks unauthorized domains from accessing an API.</td>
   </tr>
 </table>
+
+#### Related Repository
+https://github.com/Rohitha-25/Seek-AI-Frontend
