@@ -1,8 +1,9 @@
 package com.seek.docQuery.service;
 
+import com.seek.docQuery.entity.Document;
+import com.seek.docQuery.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -14,14 +15,18 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DocumentQueryService {
+    private final DocumentRepository documentRepository;
     private final VectorStore vectorStore;
     private final ChatClient.Builder chatClientBuilder;
 
-    public String queryDocument(Long documentId, String query){
+    public String queryDocument(Long documentId, String query, String email){
+        Document document = documentRepository.findByIdAndUserEmail(documentId, email)
+                .orElseThrow(() -> new RuntimeException("Document not found!"));
+
         FilterExpressionBuilder feb = new FilterExpressionBuilder();
         var filter = feb.eq("documentId", documentId.toString()).build();
 
-        List<Document> results = vectorStore.similaritySearch(
+        List<org.springframework.ai.document.Document> results = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
                         .topK(5)
@@ -30,7 +35,7 @@ public class DocumentQueryService {
         );
 
         String context = results.stream()
-                .map(Document::getText)
+                .map(org.springframework.ai.document.Document::getText)
                 .collect(Collectors.joining("\n\n"));
 
         String promptText = """

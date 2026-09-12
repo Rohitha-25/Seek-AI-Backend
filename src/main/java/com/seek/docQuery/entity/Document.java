@@ -18,4 +18,8 @@ public class Document {
 
     private String fileName;
     private LocalDateTime uploadTime;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 }

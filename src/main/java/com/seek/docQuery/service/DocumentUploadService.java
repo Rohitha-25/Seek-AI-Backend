@@ -1,7 +1,9 @@
 package com.seek.docQuery.service;
 
 import com.seek.docQuery.entity.Document;
+import com.seek.docQuery.entity.User;
 import com.seek.docQuery.repository.DocumentRepository;
+import com.seek.docQuery.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.tika.Tika;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
@@ -17,16 +19,21 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DocumentUploadService {
     private final DocumentRepository documentRepository;
+    private final UserRepository userRepository;
     private final VectorStore vectorStore;
     private final Tika tika = new Tika();
 
-    public Document uploadDocument(MultipartFile file) {
+    public Document uploadDocument(MultipartFile file, String email) {
         try {
             String text = tika.parseToString(file.getInputStream());
+
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found!"));
 
             Document document = new Document();
             document.setFileName(file.getOriginalFilename());
             document.setUploadTime(LocalDateTime.now());
+            document.setUser(user);
             document = documentRepository.save(document);
 
             org.springframework.ai.document.Document aiDocument = new org.springframework.ai.document.Document(
